@@ -16,6 +16,8 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Werror")
 
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--exclude-libs,libippicv.a -Wl,--exclude-libs,libippiw.a")
+
 ## Define each subfolders
 set(JNI_DETECTION_INCLUDE jni/jni_detections)
 set(JNI_DETECTION_SRC jni/jni_detections)
