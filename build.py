@@ -68,9 +68,10 @@ def ndk_build(args):
     isDebug = '1' if args.debug else '0'
     build_cmd = ['ndk-build',
                  '-j' + jobs,
-                 'NDK_LOG=1',
-                 'NDK_DEBUG=' + isDebug,
-                 'V=0']
+                 'NDK_LOG=0',
+                 'NDK_DEBUG=0',
+                 'V=0',
+                 '-B']
     # Print the build command
     print PrintColors.UNDERLINE + 'ndk build arguments:' + str(build_cmd) + PrintColors.ENDC
     ret = subprocess.call(build_cmd)
