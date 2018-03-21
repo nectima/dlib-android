@@ -177,28 +177,33 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   // If converting 4 channels to 3 channls because the format could be BGRA or
   // ARGB
   virtual inline int det(const cv::Mat& image) {
-    if (image.empty())
-      return 0;
-    LOG(INFO) << "com_tzutalin_dlib_PeopleDet go to det(mat)";
-    if (image.channels() == 1) {
-      cv::cvtColor(image, image, CV_GRAY2BGR);
+    if (image.empty()) return 0;
+    cv::Mat image_gray;
+    if (image.channels() > 1) {
+    cv::cvtColor(image, image_gray, CV_BGR2GRAY);
     }
-    CHECK(image.channels() == 3);
-    // TODO : Convert to gray image to speed up detection
-    // It's unnecessary to use color image for face/landmark detection
-    dlib::cv_image<dlib::bgr_pixel> img(image);
+
+    CHECK(image_gray.channels() == 1);
+
+    LOG(INFO) << "converted to grey c++";
+
+     // Resize
+     // unsigned min_face_size = 200; //px
+     // double k = 80.0 / min_face_size;
+     // cv::resize(image, image, cv::Size(), k, k);
+
+    dlib::cv_image<unsigned char> img(image_gray);
     mRets = mFaceDetector(img);
-    LOG(INFO) << "Dlib HOG face det size : " << mRets.size();
     mFaceShapeMap.clear();
-    // Process shape
-    if (mRets.size() != 0 && mLandMarkModel.empty() == false) {
-      for (unsigned long j = 0; j < mRets.size(); ++j) {
-        dlib::full_object_detection shape = msp(img, mRets[j]);
-        LOG(INFO) << "face index:" << j
-                  << "number of parts: " << shape.num_parts();
-        mFaceShapeMap[j] = shape;
-      }
-    }
+     // Process shape
+     if (mRets.size() != 0 && mLandMarkModel.empty() == false) {
+       for (unsigned long j = 0; j < mRets.size(); ++j) {
+         dlib::full_object_detection shape = msp(img, mRets[j]);
+         LOG(INFO) << "face index:" << j
+                   << "number of parts: " << shape.num_parts();
+         mFaceShapeMap[j] = shape;
+       }
+     }
     return mRets.size();
   }
 
