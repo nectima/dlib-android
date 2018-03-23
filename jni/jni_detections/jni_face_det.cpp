@@ -116,6 +116,39 @@ jobjectArray getDetectResult(JNIEnv* env, DetectorPtr faceDetector,
   return jDetRetArray;
 }
 
+void rotateMat(cv::Mat &matImage, int rotFlag) {
+    //1=ClockWise
+    //2=CounterClockWise
+    //3=180degree
+    if(rotFlag == 1) {cv::transpose(matImage, matImage);cv::flip(matImage, matImage, 1);}
+    else if(rotFlag == 2) {cv::transpose(matImage, matImage);cv::flip(matImage, matImage, 0);}
+    else if(rotFlag == 3) {cv::flip(matImage, matImage, -1);}
+}
+
+JNIEXPORT jobjectArray JNICALL
+    DLIB_FACE_JNI_METHOD(jniRawDetect)(JNIEnv* env, jobject thiz, jbyteArray rawBytes, jint rotation, jint width, jint height) {
+  LOG(INFO) << "JCPP jniRawFaceDet";
+  jbyte* b_data = env->GetByteArrayElements(rawBytes, 0);
+  cv::Mat yuvMat = cv::Mat(height+height/2, width, CV_8UC1, (unsigned char*)b_data);
+  cv::Mat bgrMat = cv::Mat(height, width, CV_8UC3);
+  //cv::cvtColor(yuvMat, bgrMat, CV_YUV2BGRA_NV21);
+  cv::cvtColor(yuvMat, bgrMat, CV_YUV2GRAY_NV21);
+
+  if(rotation == 90) {rotateMat(bgrMat, 1);}
+  else if(rotation == 180) {rotateMat(bgrMat, 3);}
+  else if(rotation == 270 || rotation == -90) {rotateMat(bgrMat, 2);}
+
+  //cv::Mat rgbaMat;
+  //cv::cvtColor(bgrMat, rgbaMat, cv::COLOR_BGR2RGBA);
+  //cv::cvtColor(bgrMat, rgbaMat, CV_GRAY2RGBA);
+  //cv::imwrite("/sdcard/ret.jpg", rgbaMat);
+
+  DetectorPtr detPtr = getDetectorPtr(env, thiz);
+  jint size = detPtr->det(bgrMat);
+  LOG(INFO) << "det face size: " << size;
+  return getDetectResult(env, detPtr, size);
+}
+
 JNIEXPORT jobjectArray JNICALL
     DLIB_FACE_JNI_METHOD(jniDetect)(JNIEnv* env, jobject thiz,
                                     jstring imgPath) {
