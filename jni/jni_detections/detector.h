@@ -181,12 +181,15 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
     cv::Mat image_gray;
 
     if (image.channels() > 1) {
-    cv::cvtColor(image, image_gray, CV_BGR2GRAY);
+        cv::cvtColor(image, image_gray, CV_BGR2GRAY);
+        LOG(INFO) << "converted to grey c++";
+    } else {
+        image_gray = image;
     }
 
     CHECK(image_gray.channels() == 1);
 
-    LOG(INFO) << "converted to grey c++";
+
 
      // Resize
      // cv::Mat image_resize;
