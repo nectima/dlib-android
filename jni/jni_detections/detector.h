@@ -178,26 +178,19 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   // ARGB
   virtual inline int det(const cv::Mat& image) {
     if (image.empty()) return 0;
-    cv::Mat image_gray;
 
     if (image.channels() > 1) {
-        cv::cvtColor(image, image_gray, CV_BGR2GRAY);
-        LOG(INFO) << "converted to grey c++";
-    } else {
-        image_gray = image;
+        cv::cvtColor(image, image, CV_BGR2GRAY);
     }
 
-    CHECK(image_gray.channels() == 1);
-
-
-
+    dlib::cv_image<unsigned char> img(image);
      // Resize
      // cv::Mat image_resize;
      // unsigned min_face_size = 200; //px
      // double k = 80.0 / min_face_size;
      // cv::resize(image_gray, image_resize, cv::Size(), k, k);
 
-    dlib::cv_image<unsigned char> img(image_gray);
+
     mRets = mFaceDetector(img);
     mFaceShapeMap.clear();
      // Process shape

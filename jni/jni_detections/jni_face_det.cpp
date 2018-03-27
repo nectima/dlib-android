@@ -127,10 +127,11 @@ void rotateMat(cv::Mat &matImage, int rotFlag) {
 JNIEXPORT jobjectArray JNICALL
     DLIB_FACE_JNI_METHOD(jniRawDetect)(JNIEnv* env, jobject thiz, jbyteArray rawBytes, jint rotation, jint width, jint height) {
   jbyte* b_data = env->GetByteArrayElements(rawBytes, 0);
-  cv::Mat yuvMat = cv::Mat(height+height/2, width, CV_8UC1, (unsigned char*)b_data);
-  cv::Mat bgrMat = cv::Mat(height, width, CV_8UC3);
-  //cv::cvtColor(yuvMat, bgrMat, CV_YUV2BGRA_NV21);
+  cv::Mat bgrMat;
+  cv::Mat yuvMat = cv::Mat(height, width, CV_8UC1, (unsigned char*)b_data);
+
   cv::cvtColor(yuvMat, bgrMat, CV_YUV2GRAY_NV21);
+
   if(rotation == 90) {rotateMat(bgrMat, 1);}
   else if(rotation == 180) {rotateMat(bgrMat, 3);}
   else if(rotation == 270 || rotation == -90) {rotateMat(bgrMat, 2);}
