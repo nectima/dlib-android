@@ -120,7 +120,7 @@ void rotateMat(cv::Mat &matImage, int rotFlag) {
     //2=CounterClockWise
     //3=180degree
     if(rotFlag == 1) {cv::transpose(matImage, matImage);cv::flip(matImage, matImage, 1);}
-    else if(rotFlag == 2) {cv::transpose(matImage, matImage);cv::flip(matImage, matImage, 0);}
+    else if(rotFlag == 2) {cv::transpose(matImage, matImage);cv::flip(matImage, matImage, -1);}
     else if(rotFlag == 3) {cv::flip(matImage, matImage, -1);}
 }
 
