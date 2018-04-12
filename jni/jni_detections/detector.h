@@ -151,6 +151,7 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   std::unordered_map<int, dlib::full_object_detection> mFaceShapeMap;
   dlib::frontal_face_detector mFaceDetector;
   cv::Rect lastFace;
+  cv::Rect returnRect;
 
   inline void init() {
     LOG(INFO) << "Init mFaceDetector";
@@ -180,8 +181,13 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   // ARGB
   virtual inline int detRaw(const cv::Mat& image) {
     cv::Mat cropped;
-    int heightDiff;
-    int widthDiff;
+    int decreasedX = 0;
+    int decreasedY = 0;
+    int increasedWidth = 0;
+    int increasedHeight = 0;
+    int padding = 20;
+
+
     if (image.empty()) return 0;
 
     if (image.channels() > 1) {
@@ -196,9 +202,29 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
         && 0 <= lastFace.height
         && lastFace.y + lastFace.height <= image.rows) {
         LOG(INFO) << "DETECTING FROM LAST FACE";
-        cropped = image(lastFace);
+
+        returnRect = cv::Rect(lastFace.x - padding, lastFace.y - padding, lastFace.width + (padding * 2), lastFace.height + (padding * 2));
+        if (returnRect.x < 0) {
+            decreasedX = returnRect.x + padding;
+            returnRect.x = 0;
+        }
+        if (returnRect.y < 0) {
+            decreasedY = returnRect.y + padding;
+            returnRect.y = 0;
+        }
+        if (returnRect.x + returnRect.width >= image.cols) {
+            returnRect.width = image.cols - returnRect.x;
+            increasedWidth = returnRect.width - lastFace.width;
+        }
+        if (returnRect.y+returnRect.height >= image.rows) {
+            returnRect.height = image.rows-returnRect.y;
+            increasedHeight = returnRect.height - lastFace.height;
+        }
+
+        cropped = image(returnRect);
     } else {
         LOG(WARNING) << "LAST FACE IS EMPTY";
+        returnRect = cv::Rect(0, 0, 0, 0);
         cropped = image;
     }
     dlib::cv_image<unsigned char> croppedImg(cropped);
@@ -229,7 +255,7 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
        for (unsigned long j = 0; j < mRets.size(); ++j) {
          LOG(INFO) << "ORIGINAL FACE RECT" << "left" << mRets[j].left() << "right" << mRets[j].right() << "top" << mRets[j].top() << "bottom" << mRets[j].bottom();
 
-         dlib::rectangle face(mRets[j].left() + lastFace.tl().x, mRets[j].top() + lastFace.tl().y, mRets[j].right() + lastFace.tl().x, mRets[j].bottom() + lastFace.tl().y);
+         dlib::rectangle face(mRets[j].left() + returnRect.tl().x, mRets[j].top() + returnRect.tl().y, mRets[j].right() + returnRect.tl().x, mRets[j].bottom() + returnRect.tl().y);
 
          LOG(INFO) << "RESIZED FACE RECT" << "left" << face.left() << "right" << face.right() << "top" << face.top() << "bottom" << face.bottom();
 
@@ -242,10 +268,13 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
      } else {
         LOG(WARNING) << "DIDNT DETECT FACE";
         lastFace = cv::Rect(0, 0, 0, 0);
+        returnRect = cv::Rect(0, 0, 0, 0);
      }
 
     return mRets.size();
   }
+
+
 
    virtual inline int det(const cv::Mat& image) {
        if (image.empty())
