@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#define SKIP_FRAMES 2
 
 class OpencvHOGDetctor {
  public:
@@ -146,9 +147,10 @@ class DLibHOGDetector {
 class DLibHOGFaceDetector : public DLibHOGDetector {
  private:
   std::string mLandMarkModel;
-  dlib::shape_predictor msp;
+  dlib::shape_predictor shapePredictor;
   std::unordered_map<int, dlib::full_object_detection> mFaceShapeMap;
   dlib::frontal_face_detector mFaceDetector;
+  cv::Rect lastFace;
 
   inline void init() {
     LOG(INFO) << "Init mFaceDetector";
@@ -162,7 +164,7 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
       : mLandMarkModel(landmarkmodel) {
     init();
     if (!mLandMarkModel.empty() && jniutils::fileExists(mLandMarkModel)) {
-      dlib::deserialize(mLandMarkModel) >> msp;
+      dlib::deserialize(mLandMarkModel) >> shapePredictor;
       LOG(INFO) << "Load landmarkmodel from " << mLandMarkModel;
     }
   }
@@ -176,34 +178,100 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   // The format of mat should be BGR or Gray
   // If converting 4 channels to 3 channls because the format could be BGRA or
   // ARGB
-  virtual inline int det(const cv::Mat& image) {
+  virtual inline int detRaw(const cv::Mat& image) {
+    cv::Mat cropped;
+    int heightDiff;
+    int widthDiff;
     if (image.empty()) return 0;
 
     if (image.channels() > 1) {
         cv::cvtColor(image, image, CV_BGR2GRAY);
     }
 
+
+    if (lastFace.area() > 0 && 0 <= lastFace.x
+        && 0 <= lastFace.width
+        && lastFace.x + lastFace.width <= image.cols
+        && 0 <= lastFace.y
+        && 0 <= lastFace.height
+        && lastFace.y + lastFace.height <= image.rows) {
+        LOG(INFO) << "DETECTING FROM LAST FACE";
+        cropped = image(lastFace);
+    } else {
+        LOG(WARNING) << "LAST FACE IS EMPTY";
+        cropped = image;
+    }
+    dlib::cv_image<unsigned char> croppedImg(cropped);
     dlib::cv_image<unsigned char> img(image);
-     // Resize
-     // cv::Mat image_resize;
-     // unsigned min_face_size = 200; //px
-     // double k = 80.0 / min_face_size;
-     // cv::resize(image_gray, image_resize, cv::Size(), k, k);
+    // Resize
+    // cv::Mat image_resize;
+    // unsigned min_face_size = 200; //px
+    // double k = 80.0 / min_face_size;
+    // cv::resize(image_gray, image_resize, cv::Size(), k, k);
 
 
-    mRets = mFaceDetector(img);
+
+    // rect from full image left71 right167 top114 bottom210
+
+
+
+    // HEIGHT DIFF: 223 WIDTHDIFF: 143
+
+    // rect from cropped left-14 right92 top7 bottom103
+
+
+
+    mRets = mFaceDetector(croppedImg);
     mFaceShapeMap.clear();
      // Process shape
      if (mRets.size() != 0 && mLandMarkModel.empty() == false) {
+        LOG(INFO) << "DETECTED FACE";
        for (unsigned long j = 0; j < mRets.size(); ++j) {
-         dlib::full_object_detection shape = msp(img, mRets[j]);
-         LOG(INFO) << "face index:" << j
-                   << "number of parts: " << shape.num_parts();
+         LOG(INFO) << "ORIGINAL FACE RECT" << "left" << mRets[j].left() << "right" << mRets[j].right() << "top" << mRets[j].top() << "bottom" << mRets[j].bottom();
+
+         dlib::rectangle face(mRets[j].left() + lastFace.tl().x, mRets[j].top() + lastFace.tl().y, mRets[j].right() + lastFace.tl().x, mRets[j].bottom() + lastFace.tl().y);
+
+         LOG(INFO) << "RESIZED FACE RECT" << "left" << face.left() << "right" << face.right() << "top" << face.top() << "bottom" << face.bottom();
+
+         dlib::full_object_detection shape = shapePredictor(img, face);
+
          mFaceShapeMap[j] = shape;
+
+         lastFace = cv::Rect(cv::Point2i(face.left(), face.top()), cv::Point2i(face.right(), face.bottom()));
        }
+     } else {
+        LOG(WARNING) << "DIDNT DETECT FACE";
+        lastFace = cv::Rect(0, 0, 0, 0);
      }
+
     return mRets.size();
   }
+
+   virtual inline int det(const cv::Mat& image) {
+       if (image.empty())
+             return 0;
+           LOG(INFO) << "com_tzutalin_dlib_PeopleDet go to det(mat)";
+           if (image.channels() == 1) {
+             cv::cvtColor(image, image, CV_GRAY2BGR);
+           }
+           CHECK(image.channels() == 3);
+           // TODO : Convert to gray image to speed up detection
+           // It's unnecessary to use color image for face/landmark detection
+           dlib::cv_image<dlib::bgr_pixel> img(image);
+           mRets = mFaceDetector(img);
+           LOG(INFO) << "Dlib HOG face det size : " << mRets.size();
+           mFaceShapeMap.clear();
+           // Process shape
+           if (mRets.size() != 0 && mLandMarkModel.empty() == false) {
+             for (unsigned long j = 0; j < mRets.size(); ++j) {
+               dlib::full_object_detection shape = shapePredictor(img, mRets[j]);
+               LOG(INFO) << "face index:" << j
+                         << "number of parts: " << shape.num_parts();
+               mFaceShapeMap[j] = shape;
+             }
+           }
+           return mRets.size();
+   }
 
   std::unordered_map<int, dlib::full_object_detection>& getFaceShapeMap() {
     return mFaceShapeMap;

@@ -128,7 +128,7 @@ JNIEXPORT jobjectArray JNICALL
     DLIB_FACE_JNI_METHOD(jniRawDetect)(JNIEnv* env, jobject thiz, jbyteArray rawBytes, jint rotation, jint width, jint height) {
   jbyte* b_data = env->GetByteArrayElements(rawBytes, 0);
   cv::Mat bgrMat;
-  cv::Mat yuvMat = cv::Mat(height, width, CV_8UC1, (unsigned char*)b_data);
+  cv::Mat yuvMat = cv::Mat(height+height/2, width, CV_8UC1, (unsigned char*)b_data);
 
   cv::cvtColor(yuvMat, bgrMat, CV_YUV2GRAY_NV21);
 
@@ -137,7 +137,7 @@ JNIEXPORT jobjectArray JNICALL
   else if(rotation == 270 || rotation == -90) {rotateMat(bgrMat, 2);}
 
   DetectorPtr detPtr = getDetectorPtr(env, thiz);
-  jint size = detPtr->det(bgrMat);
+  jint size = detPtr->detRaw(bgrMat);
   return getDetectResult(env, detPtr, size);
 }
 
