@@ -181,6 +181,7 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   // ARGB
   virtual inline int detRaw(const cv::Mat& image) {
     cv::Mat cropped;
+    bool didCrop = false;
     // How much we want to increase the size of the rectangle when we search for a face
     int padding = 20;
 
@@ -220,6 +221,7 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
 
         // crop the image to the new rectangle
         cropped = image(returnRect);
+        didCrop = true;
     } else {
         // Reset the enlarged search since we dont have any previous face, this is equal to set it to null.
         returnRect = cv::Rect(0, 0, 0, 0);
@@ -254,10 +256,15 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
         // If no face was found we reset this to have the next frame detect from a clean sheet.
         lastFace = cv::Rect(0, 0, 0, 0);
         returnRect = cv::Rect(0, 0, 0, 0);
+        if (didCrop) {
+            LOG(INFO) << "CALLING RECURSIVE!";
+            return detRaw(image);
+        }
      }
 
     return mRets.size();
   }
+
 
 
 
