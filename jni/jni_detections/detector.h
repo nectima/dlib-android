@@ -181,92 +181,77 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   // ARGB
   virtual inline int detRaw(const cv::Mat& image) {
     cv::Mat cropped;
-    int decreasedX = 0;
-    int decreasedY = 0;
-    int increasedWidth = 0;
-    int increasedHeight = 0;
+    // How much we want to increase the size of the rectangle when we search for a face
     int padding = 20;
 
 
     if (image.empty()) return 0;
 
+    // Make sure image is grey
     if (image.channels() > 1) {
         cv::cvtColor(image, image, CV_BGR2GRAY);
     }
 
 
+    // Check if we got a previous face, if we do use the rectangle from that face to search the next
     if (lastFace.area() > 0 && 0 <= lastFace.x
         && 0 <= lastFace.width
         && lastFace.x + lastFace.width <= image.cols
         && 0 <= lastFace.y
         && 0 <= lastFace.height
         && lastFace.y + lastFace.height <= image.rows) {
-        LOG(INFO) << "DETECTING FROM LAST FACE";
 
+        // Create a new rectangle from the last face, and add the padding to search a slightly bigger area since the face has probably moved a few pixels
         returnRect = cv::Rect(lastFace.x - padding, lastFace.y - padding, lastFace.width + (padding * 2), lastFace.height + (padding * 2));
+
+        // Make sure the rectangle fits within the original image
         if (returnRect.x < 0) {
-            decreasedX = returnRect.x + padding;
             returnRect.x = 0;
         }
         if (returnRect.y < 0) {
-            decreasedY = returnRect.y + padding;
             returnRect.y = 0;
         }
         if (returnRect.x + returnRect.width >= image.cols) {
             returnRect.width = image.cols - returnRect.x;
-            increasedWidth = returnRect.width - lastFace.width;
         }
         if (returnRect.y+returnRect.height >= image.rows) {
             returnRect.height = image.rows-returnRect.y;
-            increasedHeight = returnRect.height - lastFace.height;
         }
 
+        // crop the image to the new rectangle
         cropped = image(returnRect);
     } else {
-        LOG(WARNING) << "LAST FACE IS EMPTY";
+        // Reset the enlarged search since we dont have any previous face, this is equal to set it to null.
         returnRect = cv::Rect(0, 0, 0, 0);
         cropped = image;
     }
+
+    // Create dlib images, required by the detector
     dlib::cv_image<unsigned char> croppedImg(cropped);
     dlib::cv_image<unsigned char> img(image);
-    // Resize
-    // cv::Mat image_resize;
-    // unsigned min_face_size = 200; //px
-    // double k = 80.0 / min_face_size;
-    // cv::resize(image_gray, image_resize, cv::Size(), k, k);
 
-
-
-    // rect from full image left71 right167 top114 bottom210
-
-
-
-    // HEIGHT DIFF: 223 WIDTHDIFF: 143
-
-    // rect from cropped left-14 right92 top7 bottom103
-
-
-
+    // Try to find the face
     mRets = mFaceDetector(croppedImg);
+    // Reset the landmarks
     mFaceShapeMap.clear();
-     // Process shape
-     if (mRets.size() != 0 && mLandMarkModel.empty() == false) {
-        LOG(INFO) << "DETECTED FACE";
-       for (unsigned long j = 0; j < mRets.size(); ++j) {
-         LOG(INFO) << "ORIGINAL FACE RECT" << "left" << mRets[j].left() << "right" << mRets[j].right() << "top" << mRets[j].top() << "bottom" << mRets[j].bottom();
 
+     // Process shape, make sure a face was found,
+     if (mRets.size() != 0 && mLandMarkModel.empty() == false) {
+       for (unsigned long j = 0; j < mRets.size(); ++j) {
+
+         // Since we cropped the image we need to resize it again so that the landmarks gets correct coordinates
          dlib::rectangle face(mRets[j].left() + returnRect.tl().x, mRets[j].top() + returnRect.tl().y, mRets[j].right() + returnRect.tl().x, mRets[j].bottom() + returnRect.tl().y);
 
-         LOG(INFO) << "RESIZED FACE RECT" << "left" << face.left() << "right" << face.right() << "top" << face.top() << "bottom" << face.bottom();
-
+         // Find landmarks
          dlib::full_object_detection shape = shapePredictor(img, face);
 
          mFaceShapeMap[j] = shape;
 
+         // Set the face bounding box to use for the next frame
          lastFace = cv::Rect(cv::Point2i(face.left(), face.top()), cv::Point2i(face.right(), face.bottom()));
        }
      } else {
-        LOG(WARNING) << "DIDNT DETECT FACE";
+        // If no face was found we reset this to have the next frame detect from a clean sheet.
         lastFace = cv::Rect(0, 0, 0, 0);
         returnRect = cv::Rect(0, 0, 0, 0);
      }
