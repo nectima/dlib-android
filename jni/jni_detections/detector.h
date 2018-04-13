@@ -27,7 +27,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#define SKIP_FRAMES 2
+#define FRAME_PADDING 20
 
 class OpencvHOGDetctor {
  public:
@@ -181,9 +181,7 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   // ARGB
   virtual inline int detRaw(const cv::Mat& image) {
     cv::Mat cropped;
-    bool didCrop = false;
-    // How much we want to increase the size of the rectangle when we search for a face
-    int padding = 20;
+
 
 
     if (image.empty()) return 0;
@@ -203,7 +201,7 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
         && lastFace.y + lastFace.height <= image.rows) {
 
         // Create a new rectangle from the last face, and add the padding to search a slightly bigger area since the face has probably moved a few pixels
-        returnRect = cv::Rect(lastFace.x - padding, lastFace.y - padding, lastFace.width + (padding * 2), lastFace.height + (padding * 2));
+        returnRect = cv::Rect(lastFace.x - FRAME_PADDING, lastFace.y - FRAME_PADDING, lastFace.width + (FRAME_PADDING * 2), lastFace.height + (FRAME_PADDING * 2));
 
         // Make sure the rectangle fits within the original image
         if (returnRect.x < 0) {
@@ -221,9 +219,8 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
 
         // crop the image to the new rectangle
         cropped = image(returnRect);
-        didCrop = true;
     } else {
-        // Reset the enlarged search since we dont have any previous face, this is equal to set it to null.
+        // Reset the enlarged search since we dont have any previous face, this is equal of setting it to null.
         returnRect = cv::Rect(0, 0, 0, 0);
         cropped = image;
     }
@@ -256,10 +253,6 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
         // If no face was found we reset this to have the next frame detect from a clean sheet.
         lastFace = cv::Rect(0, 0, 0, 0);
         returnRect = cv::Rect(0, 0, 0, 0);
-        if (didCrop) {
-            LOG(INFO) << "CALLING RECURSIVE!";
-            return detRaw(image);
-        }
      }
 
     return mRets.size();
