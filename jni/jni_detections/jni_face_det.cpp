@@ -100,13 +100,15 @@ jobjectArray getDetectResult(JNIEnv* env, DetectorPtr faceDetector,
     g_pJNI_VisionDetRet->setRect(env, jDetRet, rect.left(), rect.top(),
                                  rect.right(), rect.bottom());
     g_pJNI_VisionDetRet->setLabel(env, jDetRet, "face");
-    std::unordered_map<int, dlib::full_object_detection>& faceShapeMap =
+    std::unordered_map<int, std::vector<cv::Point2f>>& faceShapeMap =
         faceDetector->getFaceShapeMap();
     if (faceShapeMap.find(i) != faceShapeMap.end()) {
-      dlib::full_object_detection shape = faceShapeMap[i];
-      for (unsigned long j = 0; j < shape.num_parts(); j++) {
-        int x = shape.part(j).x();
-        int y = shape.part(j).y();
+      std::vector<cv::Point2f> shape = faceShapeMap[i];
+      for (unsigned long j = 0; j < shape.size(); j++) {
+        float floatX = shape[j].x;
+        int x = (floatX >= 0) ? (int)(floatX + 0.5) : (int)(floatX - 0.5);
+        float floatY = shape[j].y;
+        int y = (floatY >= 0) ? (int)(floatY + 0.5) : (int)(floatY - 0.5);
         // Call addLandmark
         g_pJNI_VisionDetRet->addLandmark(env, jDetRet, x, y);
       }
