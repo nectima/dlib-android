@@ -152,10 +152,51 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   dlib::frontal_face_detector mFaceDetector;
   cv::Rect lastFace;
   cv::Rect returnRect;
+  std::vector<cv::Point3d> modelPoints;
+  std::vector<cv::Point2d> imagePoints;
+  std::vector<cv::Point2d> headPose;
+  std::vector<cv::Point3d> reprojectsrc;
+  cv::Mat poseMatrix;
+  cv::Mat rotationMatrix;
+  cv::Mat eulerAngle;
+  cv::Mat out_intrinsics;
+  cv::Mat out_rotation;
+  cv::Mat out_translation;
 
   inline void init() {
     LOG(INFO) << "Init mFaceDetector";
     mFaceDetector = dlib::get_frontal_face_detector();
+
+    modelPoints.push_back(cv::Point3d(6.825897, 6.760612, 4.402142));     //#33 left brow left corner
+    modelPoints.push_back(cv::Point3d(1.330353, 7.122144, 6.903745));     //#29 left brow right corner
+    modelPoints.push_back(cv::Point3d(-1.330353, 7.122144, 6.903745));    //#34 right brow left corner
+    modelPoints.push_back(cv::Point3d(-6.825897, 6.760612, 4.402142));    //#38 right brow right corner
+    modelPoints.push_back(cv::Point3d(5.311432, 5.485328, 3.987654));     //#13 left eye left corner
+    modelPoints.push_back(cv::Point3d(1.789930, 5.393625, 4.413414));     //#17 left eye right corner
+    modelPoints.push_back(cv::Point3d(-1.789930, 5.393625, 4.413414));    //#25 right eye left corner
+    modelPoints.push_back(cv::Point3d(-5.311432, 5.485328, 3.987654));    //#21 right eye right corner
+    modelPoints.push_back(cv::Point3d(2.005628, 1.409845, 6.165652));     //#55 nose left corner
+    modelPoints.push_back(cv::Point3d(-2.005628, 1.409845, 6.165652));    //#49 nose right corner
+    modelPoints.push_back(cv::Point3d(2.774015, -2.080775, 5.048531));    //#43 mouth left corner
+    modelPoints.push_back(cv::Point3d(-2.774015, -2.080775, 5.048531));   //#39 mouth right corner
+    modelPoints.push_back(cv::Point3d(0.000000, -3.116408, 6.097667));    //#45 mouth central bottom corner
+    modelPoints.push_back(cv::Point3d(0.000000, -7.415691, 4.070434));    //#6 chin corner
+
+    reprojectsrc.push_back(cv::Point3d(10.0, 10.0, 10.0));
+    reprojectsrc.push_back(cv::Point3d(10.0, 10.0, -10.0));
+    reprojectsrc.push_back(cv::Point3d(10.0, -10.0, -10.0));
+    reprojectsrc.push_back(cv::Point3d(10.0, -10.0, 10.0));
+    reprojectsrc.push_back(cv::Point3d(-10.0, 10.0, 10.0));
+    reprojectsrc.push_back(cv::Point3d(-10.0, 10.0, -10.0));
+    reprojectsrc.push_back(cv::Point3d(-10.0, -10.0, -10.0));
+    reprojectsrc.push_back(cv::Point3d(-10.0, -10.0, 10.0));
+
+    eulerAngle = cv::Mat(3, 1, CV_64FC1);
+    out_intrinsics = cv::Mat(3, 3, CV_64FC1);
+    out_rotation = cv::Mat(3, 3, CV_64FC1);
+    out_translation = cv::Mat(3, 1, CV_64FC1);
+    headPose.resize(8);
+    poseMatrix = cv::Mat(3, 4, CV_64FC1);
   }
 
  public:
@@ -175,6 +216,34 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
     cv::Mat src_img = cv::imread(path, CV_LOAD_IMAGE_COLOR);
     return det(src_img);
   }
+
+   std::vector<cv::Point2d> get_2d_image_points(dlib::full_object_detection &shape)
+   {
+        std::vector<cv::Point2d> image_points;
+
+        image_points.push_back(cv::Point2d(shape.part(17).x(), shape.part(17).y())); //#17 left brow left corner
+        image_points.push_back(cv::Point2d(shape.part(21).x(), shape.part(21).y())); //#21 left brow right corner
+        image_points.push_back(cv::Point2d(shape.part(22).x(), shape.part(22).y())); //#22 right brow left corner
+        image_points.push_back(cv::Point2d(shape.part(26).x(), shape.part(26).y())); //#26 right brow right corner
+        image_points.push_back(cv::Point2d(shape.part(36).x(), shape.part(36).y())); //#36 left eye left corner
+        image_points.push_back(cv::Point2d(shape.part(39).x(), shape.part(39).y())); //#39 left eye right corner
+        image_points.push_back(cv::Point2d(shape.part(42).x(), shape.part(42).y())); //#42 right eye left corner
+        image_points.push_back(cv::Point2d(shape.part(45).x(), shape.part(45).y())); //#45 right eye right corner
+        image_points.push_back(cv::Point2d(shape.part(31).x(), shape.part(31).y())); //#31 nose left corner
+        image_points.push_back(cv::Point2d(shape.part(35).x(), shape.part(35).y())); //#35 nose right corner
+        image_points.push_back(cv::Point2d(shape.part(48).x(), shape.part(48).y())); //#48 mouth left corner
+        image_points.push_back(cv::Point2d(shape.part(54).x(), shape.part(54).y())); //#54 mouth right corner
+        image_points.push_back(cv::Point2d(shape.part(57).x(), shape.part(57).y())); //#57 mouth central bottom corner
+        image_points.push_back(cv::Point2d(shape.part(8).x(), shape.part(8).y()));   //#8 chin corner
+        return image_points;
+
+   }
+
+   cv::Mat get_camera_matrix(float focal_length, cv::Point2d center)
+   {
+        cv::Mat camera_matrix = (cv::Mat_<double>(3,3) << focal_length, 0, center.x, 0 , focal_length, center.y, 0, 0, 1);
+        return camera_matrix;
+   }
 
   // The format of mat should be BGR or Gray
   // If converting 4 channels to 3 channls because the format could be BGRA or
@@ -233,6 +302,8 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
     mRets = mFaceDetector(croppedImg);
     // Reset the landmarks
     mFaceShapeMap.clear();
+    imagePoints.clear();
+    headPose.clear();
 
      // Process shape, make sure a face was found,
      if (mRets.size() != 0 && mLandMarkModel.empty() == false) {
@@ -248,6 +319,28 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
 
          // Set the face bounding box to use for the next frame
          lastFace = cv::Rect(cv::Point2i(face.left(), face.top()), cv::Point2i(face.right(), face.bottom()));
+
+         // Head pose
+         imagePoints = get_2d_image_points(shape);
+         double focal_length = image.cols;
+         cv::Mat camera_matrix = get_camera_matrix(focal_length, cv::Point2d(image.cols/2,image.rows/2));
+         cv::Mat rotation_vector;
+         cv::Mat rotation_matrix;
+         cv::Mat translation_vector;
+
+         cv::Mat dist_coeffs = cv::Mat::zeros(4, 1, cv::DataType<double>::type);
+
+
+         //bool solvePnP(InputArray objectPoints, InputArray imagePoints, InputArray cameraMatrix, InputArray distCoeffs, OutputArray rvec, OutputArray tvec, bool useExtrinsicGuess=false, int flags=ITERATIVE )
+         cv::solvePnP(modelPoints, imagePoints, camera_matrix, dist_coeffs, rotation_vector, translation_vector);
+
+         //void projectPoints(InputArray objectPoints, InputArray rvec, InputArray tvec, InputArray cameraMatrix, InputArray distCoeffs, OutputArray imagePoints, OutputArray jacobian=noArray(), double aspectRatio=0 )
+         cv::projectPoints(reprojectsrc, rotation_vector, translation_vector, camera_matrix, dist_coeffs, headPose);
+
+         // Calculate euler angle
+         cv::Rodrigues(rotation_vector, rotationMatrix);
+         cv::hconcat(rotationMatrix, translation_vector, poseMatrix);
+         cv::decomposeProjectionMatrix(poseMatrix, out_intrinsics, out_rotation, out_translation, cv::noArray(), cv::noArray(), cv::noArray(), eulerAngle);
        }
      } else {
         // If no face was found we reset this to have the next frame detect from a clean sheet.
@@ -290,4 +383,13 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   std::unordered_map<int, dlib::full_object_detection>& getFaceShapeMap() {
     return mFaceShapeMap;
   }
+
+  std::vector<cv::Point2d>& getHeadPose() {
+    return headPose;
+  }
+
+  cv::Mat& getEulerAngle() {
+      return eulerAngle;
+  }
+
 };

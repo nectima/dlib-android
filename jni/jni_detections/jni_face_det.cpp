@@ -102,6 +102,7 @@ jobjectArray getDetectResult(JNIEnv* env, DetectorPtr faceDetector,
     g_pJNI_VisionDetRet->setLabel(env, jDetRet, "face");
     std::unordered_map<int, dlib::full_object_detection>& faceShapeMap =
         faceDetector->getFaceShapeMap();
+
     if (faceShapeMap.find(i) != faceShapeMap.end()) {
       dlib::full_object_detection shape = faceShapeMap[i];
       for (unsigned long j = 0; j < shape.num_parts(); j++) {
@@ -110,6 +111,19 @@ jobjectArray getDetectResult(JNIEnv* env, DetectorPtr faceDetector,
         // Call addLandmark
         g_pJNI_VisionDetRet->addLandmark(env, jDetRet, x, y);
       }
+
+      std::vector<cv::Point2d> headPose = faceDetector->getHeadPose();
+
+      for ( auto &point : headPose ) {
+        g_pJNI_VisionDetRet->addHeadPose(env, jDetRet, point.x, point.y);
+      }
+
+      cv::Mat eulerAngle = faceDetector->getEulerAngle();
+      g_pJNI_VisionDetRet->addEulerAngle(env, jDetRet, eulerAngle.at<double>(0));
+      g_pJNI_VisionDetRet->addEulerAngle(env, jDetRet, eulerAngle.at<double>(1));
+      g_pJNI_VisionDetRet->addEulerAngle(env, jDetRet, eulerAngle.at<double>(2));
+
+
     }
   }
   return jDetRetArray;

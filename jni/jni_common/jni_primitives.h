@@ -113,8 +113,9 @@ class JNI_VisionDetRet {
     jID_top = env->GetFieldID(detRetClass, "mTop", "I");
     jID_right = env->GetFieldID(detRetClass, "mRight", "I");
     jID_bottom = env->GetFieldID(detRetClass, "mBottom", "I");
-    jMethodID_addLandmark =
-        env->GetMethodID(detRetClass, "addLandmark", "(II)Z");
+    jMethodID_addLandmark = env->GetMethodID(detRetClass, "addLandmark", "(II)Z");
+    jMethodID_addHeadPose = env->GetMethodID(detRetClass, "addHeadPose", "(II)Z");
+    jMethodID_addEulerAngle = env->GetMethodID(detRetClass, "addEulerAngle", "(I)Z");
   }
 
   void setLabel(JNIEnv* env, jobject& jDetRet, const std::string& label) {
@@ -132,6 +133,14 @@ class JNI_VisionDetRet {
 
   void addLandmark(JNIEnv* env, jobject& jDetRet, const int& x, const int& y) {
     env->CallBooleanMethod(jDetRet, jMethodID_addLandmark, x, y);
+  }
+
+  void addHeadPose(JNIEnv* env, jobject& jDetRet, const int& x, const int& y) {
+      env->CallBooleanMethod(jDetRet, jMethodID_addHeadPose, x, y);
+  }
+
+  void addEulerAngle(JNIEnv* env, jobject& jDetRet, const int& position) {
+        env->CallBooleanMethod(jDetRet, jMethodID_addEulerAngle, position);
   }
 
   static jobject createJObject(JNIEnv* env) {
@@ -154,5 +163,7 @@ class JNI_VisionDetRet {
   jfieldID jID_right;
   jfieldID jID_bottom;
   jmethodID jMethodID_addLandmark;
+  jmethodID jMethodID_addHeadPose;
+  jmethodID jMethodID_addEulerAngle;
 };
 #endif  // JNI_PRIMITIVES_H
