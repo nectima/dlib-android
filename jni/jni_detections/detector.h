@@ -200,7 +200,7 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
     setIdentity(KF.measurementMatrix);
 
     //!< process noise covariance matrix (Q)
-    setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-5));
+    setIdentity(KF.processNoiseCov, cv::Scalar::all(1));
 
     //!< measurement noise covariance matrix (R)
     setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-1));
