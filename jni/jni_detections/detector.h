@@ -162,6 +162,10 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   cv::Mat out_intrinsics;
   cv::Mat out_rotation;
   cv::Mat out_translation;
+  dlib::correlation_tracker tracker;
+  dlib::rectangle face;
+  bool tracking = false;
+  int frameCount = 1;
 
   inline void init() {
     LOG(INFO) << "Init mFaceDetector";
@@ -197,6 +201,7 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
     out_translation = cv::Mat(3, 1, CV_64FC1);
     headPose.resize(8);
     poseMatrix = cv::Mat(3, 4, CV_64FC1);
+
   }
 
  public:
@@ -251,8 +256,6 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   virtual inline int detRaw(const cv::Mat& image) {
     cv::Mat cropped;
 
-
-
     if (image.empty()) return 0;
 
     // Make sure image is grey
@@ -261,98 +264,108 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
     }
 
 
-    // Check if we got a previous face, if we do use the rectangle from that face to search the next
-    if (lastFace.area() > 0 && 0 <= lastFace.x
-        && 0 <= lastFace.width
-        && lastFace.x + lastFace.width <= image.cols
-        && 0 <= lastFace.y
-        && 0 <= lastFace.height
-        && lastFace.y + lastFace.height <= image.rows) {
 
-        // Create a new rectangle from the last face, and add the padding to search a slightly bigger area since the face has probably moved a few pixels
-        returnRect = cv::Rect(lastFace.x - FRAME_PADDING, lastFace.y - FRAME_PADDING, lastFace.width + (FRAME_PADDING * 2), lastFace.height + (FRAME_PADDING * 2));
-
-        // Make sure the rectangle fits within the original image
-        if (returnRect.x < 0) {
-            returnRect.x = 0;
-        }
-        if (returnRect.y < 0) {
-            returnRect.y = 0;
-        }
-        if (returnRect.x + returnRect.width >= image.cols) {
-            returnRect.width = image.cols - returnRect.x;
-        }
-        if (returnRect.y+returnRect.height >= image.rows) {
-            returnRect.height = image.rows-returnRect.y;
-        }
-
-        // crop the image to the new rectangle
-        cropped = image(returnRect);
-    } else {
-        // Reset the enlarged search since we dont have any previous face, this is equal of setting it to null.
-        returnRect = cv::Rect(0, 0, 0, 0);
-        cropped = image;
-    }
-
-    // Create dlib images, required by the detector
-    dlib::cv_image<unsigned char> croppedImg(cropped);
     dlib::cv_image<unsigned char> img(image);
-
-    // Try to find the face
-    mRets = mFaceDetector(croppedImg);
-    // Reset the landmarks
     mFaceShapeMap.clear();
     imagePoints.clear();
     headPose.clear();
 
+    if (tracking == false) {
+        detect(img);
+    } else {
+
+        if (frameCount == 10) {
+            detect(img);
+            frameCount = 1;
+        } else {
+            double quality;
+            if (frameCount % 3) {
+                quality = tracker.update(img);
+            } else {
+                quality = tracker.update_noscale(img);
+            }
+
+            LOG(INFO) << "QUALITY: " << quality;
+
+            if (quality > 4) {
+                LOG(INFO) << "TRACKER";
+                dlib::drectangle position = tracker.get_position();
+                face = dlib::rectangle(position.left(), position.top(), position.right(), position.bottom());
+                frameCount++;
+            } else {
+                face = dlib::rectangle(0, 0, 0, 0);
+                tracking = false;
+                frameCount = 1;
+            }
+        }
+
+    }
+
+    if (face.area() > 0) {
+    // Find landmarks
+        dlib::full_object_detection shape = shapePredictor(img, face);
+
+        mFaceShapeMap[0] = shape;
+
+        // Head pose
+        imagePoints = get_2d_image_points(shape);
+        double focal_length = image.cols;
+        cv::Mat camera_matrix = get_camera_matrix(focal_length, cv::Point2d(image.cols/2,image.rows/2));
+        cv::Mat rotation_vector;
+        cv::Mat rotation_matrix;
+        cv::Mat translation_vector;
+
+        cv::Mat dist_coeffs = cv::Mat::zeros(4, 1, cv::DataType<double>::type);
+
+
+        //bool solvePnP(InputArray objectPoints, InputArray imagePoints, InputArray cameraMatrix, InputArray distCoeffs, OutputArray rvec, OutputArray tvec, bool useExtrinsicGuess=false, int flags=ITERATIVE )
+        cv::solvePnP(modelPoints, imagePoints, camera_matrix, dist_coeffs, rotation_vector, translation_vector);
+
+        //void projectPoints(InputArray objectPoints, InputArray rvec, InputArray tvec, InputArray cameraMatrix, InputArray distCoeffs, OutputArray imagePoints, OutputArray jacobian=noArray(), double aspectRatio=0 )
+        cv::projectPoints(reprojectsrc, rotation_vector, translation_vector, camera_matrix, dist_coeffs, headPose);
+
+        // Calculate euler angle
+        cv::Rodrigues(rotation_vector, rotationMatrix);
+        cv::hconcat(rotationMatrix, translation_vector, poseMatrix);
+        cv::decomposeProjectionMatrix(poseMatrix, out_intrinsics, out_rotation, out_translation, cv::noArray(), cv::noArray(), cv::noArray(), eulerAngle);
+    } else {
+        tracking = false;
+    }
+
+
+    // Create dlib images, required by the detector
+    //dlib::cv_image<unsigned char> croppedImg(cropped);
+
+
+    // Try to find the face
+
+    // Reset the landmarks
+
+
      // Process shape, make sure a face was found,
-     if (mRets.size() != 0 && mLandMarkModel.empty() == false) {
-       for (unsigned long j = 0; j < mRets.size(); ++j) {
 
-         // Since we cropped the image we need to resize it again so that the landmarks gets correct coordinates
-         dlib::rectangle face(mRets[j].left() + returnRect.tl().x, mRets[j].top() + returnRect.tl().y, mRets[j].right() + returnRect.tl().x, mRets[j].bottom() + returnRect.tl().y);
-
-         // Find landmarks
-         dlib::full_object_detection shape = shapePredictor(img, face);
-
-         mFaceShapeMap[j] = shape;
-
-         // Set the face bounding box to use for the next frame
-         lastFace = cv::Rect(cv::Point2i(face.left(), face.top()), cv::Point2i(face.right(), face.bottom()));
-
-         // Head pose
-         imagePoints = get_2d_image_points(shape);
-         double focal_length = image.cols;
-         cv::Mat camera_matrix = get_camera_matrix(focal_length, cv::Point2d(image.cols/2,image.rows/2));
-         cv::Mat rotation_vector;
-         cv::Mat rotation_matrix;
-         cv::Mat translation_vector;
-
-         cv::Mat dist_coeffs = cv::Mat::zeros(4, 1, cv::DataType<double>::type);
-
-
-         //bool solvePnP(InputArray objectPoints, InputArray imagePoints, InputArray cameraMatrix, InputArray distCoeffs, OutputArray rvec, OutputArray tvec, bool useExtrinsicGuess=false, int flags=ITERATIVE )
-         cv::solvePnP(modelPoints, imagePoints, camera_matrix, dist_coeffs, rotation_vector, translation_vector);
-
-         //void projectPoints(InputArray objectPoints, InputArray rvec, InputArray tvec, InputArray cameraMatrix, InputArray distCoeffs, OutputArray imagePoints, OutputArray jacobian=noArray(), double aspectRatio=0 )
-         cv::projectPoints(reprojectsrc, rotation_vector, translation_vector, camera_matrix, dist_coeffs, headPose);
-
-         // Calculate euler angle
-         cv::Rodrigues(rotation_vector, rotationMatrix);
-         cv::hconcat(rotationMatrix, translation_vector, poseMatrix);
-         cv::decomposeProjectionMatrix(poseMatrix, out_intrinsics, out_rotation, out_translation, cv::noArray(), cv::noArray(), cv::noArray(), eulerAngle);
-       }
-     } else {
-        // If no face was found we reset this to have the next frame detect from a clean sheet.
-        lastFace = cv::Rect(0, 0, 0, 0);
-        returnRect = cv::Rect(0, 0, 0, 0);
-     }
 
     return mRets.size();
   }
 
 
+   virtual inline void detect(dlib::cv_image<unsigned char> img) {
+        tracker = dlib::correlation_tracker();
+        mRets = mFaceDetector(img);
 
+        if (mRets.size() != 0 && mLandMarkModel.empty() == false) {
+            face = mRets[0];
+            LOG(INFO) << "DETECTION";
+            tracker.start_track(img, face);
+            tracking = true;
+
+                // Since we cropped the image we need to resize it again so that the landmarks gets correct coordinates
+                //dlib::rectangle face(mRets[j].left() + returnRect.tl().x, mRets[j].top() + returnRect.tl().y, mRets[j].right() + returnRect.tl().x, mRets[j].bottom() + returnRect.tl().y);
+        } else {
+            face = dlib::rectangle(0, 0, 0, 0);
+            tracking = false;
+        }
+   }
 
    virtual inline int det(const cv::Mat& image) {
        if (image.empty())
