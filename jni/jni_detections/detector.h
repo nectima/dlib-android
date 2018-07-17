@@ -156,6 +156,7 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   std::vector<cv::Point2d> imagePoints;
   std::vector<cv::Point2d> headPose;
   std::vector<cv::Point3d> reprojectsrc;
+  std::vector<std::vector<cv::Point2f>> delaunay;
   cv::Mat poseMatrix;
   cv::Mat rotationMatrix;
   cv::Mat eulerAngle;
@@ -245,6 +246,56 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
         return camera_matrix;
    }
 
+   void calculatePose(dlib::full_object_detection shape, cv::Mat image)
+   {
+         imagePoints = get_2d_image_points(shape);
+         double focal_length = image.cols;
+         cv::Mat camera_matrix = get_camera_matrix(focal_length, cv::Point2d(image.cols/2,image.rows/2));
+         cv::Mat rotation_vector;
+         cv::Mat rotation_matrix;
+         cv::Mat translation_vector;
+
+         cv::Mat dist_coeffs = cv::Mat::zeros(4, 1, cv::DataType<double>::type);
+
+
+         //bool solvePnP(InputArray objectPoints, InputArray imagePoints, InputArray cameraMatrix, InputArray distCoeffs, OutputArray rvec, OutputArray tvec, bool useExtrinsicGuess=false, int flags=ITERATIVE )
+         cv::solvePnP(modelPoints, imagePoints, camera_matrix, dist_coeffs, rotation_vector, translation_vector);
+
+         //void projectPoints(InputArray objectPoints, InputArray rvec, InputArray tvec, InputArray cameraMatrix, InputArray distCoeffs, OutputArray imagePoints, OutputArray jacobian=noArray(), double aspectRatio=0 )
+         cv::projectPoints(reprojectsrc, rotation_vector, translation_vector, camera_matrix, dist_coeffs, headPose);
+
+         // Calculate euler angle
+         cv::Rodrigues(rotation_vector, rotationMatrix);
+         cv::hconcat(rotationMatrix, translation_vector, poseMatrix);
+         cv::decomposeProjectionMatrix(poseMatrix, out_intrinsics, out_rotation, out_translation, cv::noArray(), cv::noArray(), cv::noArray(), eulerAngle);
+   }
+
+   void calculateDelaunay(dlib::full_object_detection shape, cv::Rect rect)
+   {
+        cv::Subdiv2D subdiv(rect);
+
+        for (unsigned long j = 0; j < shape.num_parts(); j++) {
+            cv::Point2f point(shape.part(j).x(), shape.part(j).y());
+            subdiv.insert(point);
+        }
+
+        std::vector<cv::Vec6f> triangleList;
+        subdiv.getTriangleList(triangleList);
+        std::vector<cv::Point2f> pt(3);
+
+        for( size_t i = 0; i < triangleList.size(); i++ )
+        {
+            std::vector<cv::Point2f> pt(3);
+            cv::Vec6f t = triangleList[i];
+            pt[0] = cv::Point2f(t[0], t[1]);
+            pt[1] = cv::Point2f(t[2], t[3]);
+            pt[2] = cv::Point2f(t[4], t[5]);
+
+            delaunay.push_back(pt);
+        }
+   }
+
+
   // The format of mat should be BGR or Gray
   // If converting 4 channels to 3 channls because the format could be BGRA or
   // ARGB
@@ -321,26 +372,12 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
          lastFace = cv::Rect(cv::Point2i(face.left(), face.top()), cv::Point2i(face.right(), face.bottom()));
 
          // Head pose
-         imagePoints = get_2d_image_points(shape);
-         double focal_length = image.cols;
-         cv::Mat camera_matrix = get_camera_matrix(focal_length, cv::Point2d(image.cols/2,image.rows/2));
-         cv::Mat rotation_vector;
-         cv::Mat rotation_matrix;
-         cv::Mat translation_vector;
+         calculatePose(shape, image);
 
-         cv::Mat dist_coeffs = cv::Mat::zeros(4, 1, cv::DataType<double>::type);
+         //delaunay
+         calculateDelaunay(shape, lastFace);
 
 
-         //bool solvePnP(InputArray objectPoints, InputArray imagePoints, InputArray cameraMatrix, InputArray distCoeffs, OutputArray rvec, OutputArray tvec, bool useExtrinsicGuess=false, int flags=ITERATIVE )
-         cv::solvePnP(modelPoints, imagePoints, camera_matrix, dist_coeffs, rotation_vector, translation_vector);
-
-         //void projectPoints(InputArray objectPoints, InputArray rvec, InputArray tvec, InputArray cameraMatrix, InputArray distCoeffs, OutputArray imagePoints, OutputArray jacobian=noArray(), double aspectRatio=0 )
-         cv::projectPoints(reprojectsrc, rotation_vector, translation_vector, camera_matrix, dist_coeffs, headPose);
-
-         // Calculate euler angle
-         cv::Rodrigues(rotation_vector, rotationMatrix);
-         cv::hconcat(rotationMatrix, translation_vector, poseMatrix);
-         cv::decomposeProjectionMatrix(poseMatrix, out_intrinsics, out_rotation, out_translation, cv::noArray(), cv::noArray(), cv::noArray(), eulerAngle);
        }
      } else {
         // If no face was found we reset this to have the next frame detect from a clean sheet.
@@ -391,5 +428,9 @@ class DLibHOGFaceDetector : public DLibHOGDetector {
   cv::Mat& getEulerAngle() {
       return eulerAngle;
   }
+
+  std::vector<std::vector<cv::Point2f>>& getDelaunay() {
+      return delaunay;
+    }
 
 };

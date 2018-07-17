@@ -124,6 +124,9 @@ jobjectArray getDetectResult(JNIEnv* env, DetectorPtr faceDetector,
       g_pJNI_VisionDetRet->addEulerAngle(env, jDetRet, eulerAngle.at<double>(2));
 
 
+      std::vector<std::vector<cv::Point2f>> delaunay = faceDetector->getDelaunay();
+
+
     }
   }
   return jDetRetArray;
