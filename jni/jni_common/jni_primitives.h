@@ -116,6 +116,7 @@ class JNI_VisionDetRet {
     jMethodID_addLandmark = env->GetMethodID(detRetClass, "addLandmark", "(II)Z");
     jMethodID_addHeadPose = env->GetMethodID(detRetClass, "addHeadPose", "(II)Z");
     jMethodID_addEulerAngle = env->GetMethodID(detRetClass, "addEulerAngle", "(D)Z");
+    jMethodID_addDelaunayTriangle = env->GetMethodID(detRetClass, "addDelaunayTriangle", "(FFFFFF)Z");
   }
 
   void setLabel(JNIEnv* env, jobject& jDetRet, const std::string& label) {
@@ -143,6 +144,11 @@ class JNI_VisionDetRet {
         env->CallBooleanMethod(jDetRet, jMethodID_addEulerAngle, position);
   }
 
+  void addDelaunayTriangle(JNIEnv* env, jobject& jDetRet, const float& ax, const float& ay, const float& bx, const float& by, const float& cx, const float& cy) {
+
+          env->CallBooleanMethod(jDetRet, jMethodID_addDelaunayTriangle, ax, ay, bx, by, cx, cy);
+    }
+
   static jobject createJObject(JNIEnv* env) {
     jclass detRetClass = env->FindClass(CLASSNAME_VISION_DET_RET);
     jmethodID mid =
@@ -165,5 +171,6 @@ class JNI_VisionDetRet {
   jmethodID jMethodID_addLandmark;
   jmethodID jMethodID_addHeadPose;
   jmethodID jMethodID_addEulerAngle;
+  jmethodID jMethodID_addDelaunayTriangle;
 };
 #endif  // JNI_PRIMITIVES_H

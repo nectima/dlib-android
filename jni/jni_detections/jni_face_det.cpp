@@ -125,6 +125,13 @@ jobjectArray getDetectResult(JNIEnv* env, DetectorPtr faceDetector,
 
 
       std::vector<std::vector<cv::Point2f>> delaunay = faceDetector->getDelaunay();
+      for ( auto &triangle : delaunay ) {
+        cv::Point2f a = triangle[0];
+        cv::Point2f b = triangle[1];
+        cv::Point2f c = triangle[2];
+        g_pJNI_VisionDetRet->addDelaunayTriangle(env, jDetRet, a.x, a.y, b.x, b.y, c.x, c.y);
+      }
+
 
 
     }
